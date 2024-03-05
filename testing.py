@@ -54,62 +54,91 @@ def check_precision(Y, Yp):
     return accuracy, avg_in_corect
 
 
+def get_function_training_data(func, nr_of_samples, randomization, min_lim, max_lim):
+    X = np.linspace(min_lim, max_lim, nr_of_samples)
+    Y = []
+    for x in X:
+        val = func(x) + randomization * np.random.normal()
+        Y.append(val)
+    return X, Y
+
+
+def randomise_order_of_train_data(X, Y):
+    ixes = [*range(len(X))]
+    np.random.shuffle(ixes)
+    Xp = []
+    Yp = []
+    for i in ixes:
+        Xp.append(X[i])
+        Yp.append(Y[i])
+    return Xp, Yp
+
+
 rel = ReluFunction()
 sig = SigmoidFunction()
 tan = TanHFunction()
 lin = BaseLayerFunction()
 if __name__ == "__main__":
-    X, Y = get_x_y_train_data()
 
-    def binarise_y(Y):
-        avg = np.average(Y)
-        y2 = []
-        for y in Y:
-            if y > int(avg):
-                y2.append(1)
-            # elif y < int(avg):
-            #     y2.append(-1)
-            else:
-                y2.append(0)
-        return y2
+    min_max = (-1, 4)
+    testing_range = (min_max[0] * 2, min_max[1] * 2)
+    rand = 10
 
-    Xt, Xtest, Yt, Ytest = train_test_split(
-        X, binarise_y(Y), test_size=0.2, random_state=42
+    def func(x):
+        return np.sin(x)
+
+    training_posts_nr = 10000
+    X, Y = get_function_training_data(
+        func, training_posts_nr, rand, min_max[0], min_max[1]
     )
+    X, Y = randomise_order_of_train_data(X, Y)
 
-    nr_of_neurons = 8
-    nr_of_layers = 3
+    # def binarise_y(Y):
+    #     avg = np.average(Y)
+    #     y2 = []
+    #     for y in Y:
+    #         if y > int(avg):
+    #             y2.append(1)
+    #         # elif y < int(avg):
+    #         #     y2.append(-1)
+    #         else:
+    #             y2.append(0)
+    #     return y2
+
+    Xt, Xtest, Yt, Ytest = train_test_split(X, Y, test_size=0.2, random_state=42)
+
+    # y_size = len(Yt[0])
+    y_size = 1
+
+    x_size = 1
+    hidden_function = rel
+    nr_of_neurons = 10
+    last_func = lin
+    iters = 100000
     batch_size = 100
-    iters = 10000
-    mid_function = tan
-    last_func = sig
-
-    nr_of_possible_values = int(max(Yt) - min(Yt)) + 1
-    bro = BinaryResultOverlay(nr_of_possible_values, int(min(Yt)))
-    Ytc = bro.convert_list_int_Y_to_grays_code_arrays(Yt)
-
-    y_size = len(Ytc[0])
-    x_size = len(Xt[0])
     layers = [
-        *[LayerBase(nr_of_neurons, mid_function) for _ in range(nr_of_layers)],
+        LayerBase(nr_of_neurons, hidden_function),
+        LayerBase(nr_of_neurons, sig),
         LayerBase(y_size, last_func),
     ]
 
     nn = TrainableNeuralNetwork(layers, x_size)
     Ycheck = nn.calculate_output_for_many_values(Xtest)
-    a = bro.convert_activations_to_result(Ycheck)
-    print(check_precision(Ytest, a))
 
     adam = AdamOptimiser()
     cf = CostFunction()
 
-    nn.train_on_data(adam, cf, Xt, Ytc, iters, (len(Xt) // batch_size))
-    Ycheck = nn.calculate_output_for_many_values(Xtest)
-    print(check_precision(Ytest, bro.convert_activations_to_result(Ycheck)))
-    ybcheck = bro.convert_activations_to_result(Ycheck)
-    print("testing 1", np.sum([1 for i in Ytest if i == 1]))
-    print("testing -1", np.sum([-1 for i in Ytest if i == 0]))
-    print("nn 1", np.sum([1 for i in ybcheck if i == 1]))
-    print("nn -1", np.sum([-1 for i in ybcheck if i == 0]))
+    nn.train_on_data(adam, cf, Xt, Yt, iters, (len(Xt) // batch_size))
+    Ycheck = nn.calculate_output_for_many_values(
+        np.linspace(testing_range[0], testing_range[1], 100)
+    )
+    Ycheck = [float(y) for y in Ycheck]
+    # plt.plot(X, Y)
+    plt.plot(
+        np.linspace(testing_range[0], testing_range[1], 100),
+        func(np.linspace(testing_range[0], testing_range[1], 100)),
+    )
+    plt.plot(np.linspace(testing_range[0], testing_range[1], 100), Ycheck)
+    plt.show()
     plt.plot(nn.cost_hist)
     plt.show()
